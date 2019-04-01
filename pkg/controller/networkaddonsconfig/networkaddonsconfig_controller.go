@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"reflect"
 	"strings"
 
 	osv1 "github.com/openshift/api/operator/v1"
@@ -20,13 +21,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	opv1alpha1 "github.com/kubevirt/cluster-network-addons-operator/pkg/apis/networkaddonsoperator/v1alpha1"
 	"github.com/kubevirt/cluster-network-addons-operator/pkg/apply"
+	"github.com/kubevirt/cluster-network-addons-operator/pkg/controller/statusmanager"
 	"github.com/kubevirt/cluster-network-addons-operator/pkg/names"
 	"github.com/kubevirt/cluster-network-addons-operator/pkg/network"
 )
@@ -57,10 +61,15 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager, sccIsAvailable bool) *ReconcileNetworkAddonsConfig {
+	// Status manager is shared between both reconcilers and it is used to update conditions of
+	// NetworkAddonsConfig.State. NetworkAddonsConfig reconciler updates it with progress of rendering
+	// and applying of manifests. Pods reconciler updates it with progress of deployed pods.
+	statusManager := statusmanager.New(mgr.GetClient(), names.OPERATOR_CONFIG)
 	return &ReconcileNetworkAddonsConfig{
 		client:         mgr.GetClient(),
 		scheme:         mgr.GetScheme(),
-		podReconciler:  newPodReconciler(),
+		podReconciler:  newPodReconciler(statusManager),
+		statusManager:  statusManager,
 		sccIsAvailable: sccIsAvailable,
 	}
 }
@@ -73,8 +82,27 @@ func add(mgr manager.Manager, r *ReconcileNetworkAddonsConfig) error {
 		return err
 	}
 
+	// Create custom predicate for NetworkAddonsConfig watcher. This makes sure that Status field
+	// updates will not trigger reconciling of the object. Reconciliation is trigger only if
+	// Spec fields differ.
+	pred := predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldConfig, err := runtimeObjectToNetworkAddonsConfig(e.ObjectOld)
+			if err != nil {
+				log.Printf("Failed to convert runtime.Object to NetworkAddonsConfig: %v", err)
+				return false
+			}
+			newConfig, err := runtimeObjectToNetworkAddonsConfig(e.ObjectNew)
+			if err != nil {
+				log.Printf("Failed to convert runtime.Object to NetworkAddonsConfig: %v", err)
+				return false
+			}
+			return !reflect.DeepEqual(oldConfig.Spec, newConfig.Spec)
+		},
+	}
+
 	// Watch for changes to primary resource NetworkAddonsConfig
-	if err := c.Watch(&source.Kind{Type: &opv1alpha1.NetworkAddonsConfig{}}, &handler.EnqueueRequestForObject{}); err != nil {
+	if err := c.Watch(&source.Kind{Type: &opv1alpha1.NetworkAddonsConfig{}}, &handler.EnqueueRequestForObject{}, pred); err != nil {
 		return err
 	}
 
@@ -106,6 +134,7 @@ type ReconcileNetworkAddonsConfig struct {
 	client         client.Client
 	scheme         *runtime.Scheme
 	podReconciler  *ReconcilePods
+	statusManager  *statusmanager.StatusManager
 	sccIsAvailable bool
 }
 
@@ -136,6 +165,8 @@ func (r *ReconcileNetworkAddonsConfig) Reconcile(request reconcile.Request) (rec
 	// Canonicalize and validate NetworkAddonsConfig, finally render objects of requested components
 	objs, err := r.renderObjects(networkAddonsConfig)
 	if err != nil {
+		// If failed, set NetworkAddonsConfig to failing and requeue
+		r.statusManager.SetFailing(statusmanager.OperatorConfig, "FailedToRender", err.Error())
 		return reconcile.Result{}, err
 	}
 
@@ -145,8 +176,17 @@ func (r *ReconcileNetworkAddonsConfig) Reconcile(request reconcile.Request) (rec
 	// Apply generated objects on Kubernetes API server
 	err = r.applyObjects(networkAddonsConfig, objs)
 	if err != nil {
+		// If failed, set NetworkAddonsConfig to failing and requeue
+		r.statusManager.SetFailing(statusmanager.OperatorConfig, "FailedToApply", err.Error())
 		return reconcile.Result{}, err
 	}
+
+	// Everything went smooth, remove failures from NetworkAddonsConfig if there are any from
+	// previous runs.
+	r.statusManager.SetNotFailing(statusmanager.OperatorConfig)
+
+	// From now on, r.podReconciler takes over NetworkAddonsConfig handling, it will track deployed
+	// objects and set NetworkAddonsConfig.Status accordingly
 
 	return reconcile.Result{}, nil
 }
@@ -253,6 +293,9 @@ func (r *ReconcileNetworkAddonsConfig) trackDeployedObjects(objs []*unstructured
 		}
 	}
 
+	r.statusManager.SetDaemonSets(daemonSets)
+	r.statusManager.SetDeployments(deployments)
+
 	allResources := []types.NamespacedName{}
 	allResources = append(allResources, daemonSets...)
 	allResources = append(allResources, deployments...)
@@ -290,4 +333,20 @@ func isResourceAvailable(kubeClient kubernetes.Interface, name string, group str
 	}
 
 	return true, nil
+}
+
+func runtimeObjectToNetworkAddonsConfig(obj runtime.Object) (*opv1alpha1.NetworkAddonsConfig, error) {
+	// convert the runtime.Object to unstructured.Unstructured
+	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		return nil, err
+	}
+
+	// convert unstructured.Unstructured to a NetworkAddonsConfig
+	networkAddonsConfig := &opv1alpha1.NetworkAddonsConfig{}
+	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj, networkAddonsConfig); err != nil {
+		return nil, err
+	}
+
+	return networkAddonsConfig, nil
 }
