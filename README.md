@@ -153,6 +153,18 @@ spec:
 EOF
 ```
 
+Finally you can wait for the operator to finish deployment:
+
+```shell
+kubectl wait networkaddonsconfig cluster --for condition=Ready
+```
+
+In case something failed, you can find the error in the NetworkAddonsConfig Status field:
+
+```shell
+kubectl get networkaddonsconfig cluster -o yaml
+```
+
 For more information about the configuration format check [configuring section](#configuration).
 
 # Development
