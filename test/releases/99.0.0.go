@@ -24,7 +24,7 @@ func init() {
 				ParentName: "kube-cni-linux-bridge-plugin",
 				ParentKind: "DaemonSet",
 				Name:       "cni-plugins",
-				Image:      "quay.io/kubevirt/cni-default-plugins@sha256:d211830c45bde8608befb04cf2accc91490467f3b8e091b812b76453572c9ab8",
+				Image:      "quay.io/kubevirt/cni-default-plugins@sha256:39e9cd12f127d1f683389714a6f1037e5198ad82088d0a89194a30dedb5e531a",
 			},
 			{
 				ParentName: "kubemacpool-mac-controller-manager",
