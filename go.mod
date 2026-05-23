@@ -1,8 +1,6 @@
 module github.com/kubevirt/cluster-network-addons-operator
 
-go 1.21
-
-toolchain go1.22.1
+go 1.25.0
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
@@ -230,7 +228,7 @@ require (
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/term v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
