@@ -70,7 +70,7 @@ require (
 	github.com/cloudflare/cfssl v1.5.0 // indirect
 	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
-	github.com/containerd/containerd v1.7.12 // indirect
+	github.com/containerd/containerd v1.7.33 // indirect
 	github.com/containerd/continuity v0.3.0 // indirect
 	github.com/containerd/ttrpc v1.2.2 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
@@ -299,7 +299,7 @@ replace (
 	bitbucket.org/ww/goautoneg => github.com/munnerz/goautoneg v0.0.0-20120707110453-a547fc61f48d
 	github.com/Masterminds/goutils => github.com/Masterminds/goutils v1.1.1
 	github.com/Microsoft/go-winio => github.com/Microsoft/go-winio v0.4.17
-	github.com/containerd/containerd => github.com/containerd/containerd v1.5.18
+	github.com/containerd/containerd => github.com/containerd/containerd v1.7.29
 	github.com/docker/distribution => github.com/docker/distribution v2.8.1+incompatible
 	github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
 	github.com/mattn/go-sqlite3 => github.com/mattn/go-sqlite3 v1.10.0
