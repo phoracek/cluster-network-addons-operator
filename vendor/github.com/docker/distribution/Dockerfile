@@ -1,7 +1,7 @@
-# syntax=docker/dockerfile:1.3
+# syntax=docker/dockerfile:1.26
 
 ARG GO_VERSION=1.16.15
-ARG GORELEASER_XX_VERSION=1.2.5
+ARG GORELEASER_XX_VERSION=1.8.3
 
 FROM --platform=$BUILDPLATFORM crazymax/goreleaser-xx:${GORELEASER_XX_VERSION} AS goreleaser-xx
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS base
@@ -40,7 +40,7 @@ COPY --from=build /out/*.sha256 /
 FROM scratch AS binary
 COPY --from=build /usr/local/bin/registry* /
 
-FROM alpine:3.14
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates
 COPY cmd/registry/config-dev.yml /etc/docker/registry/config.yml
 COPY --from=build /usr/local/bin/registry /bin/registry
