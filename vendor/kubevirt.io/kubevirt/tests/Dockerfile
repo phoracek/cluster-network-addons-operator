@@ -16,7 +16,7 @@
 # Copyright 2018 Red Hat, Inc.
 #
 
-FROM fedora:28
+FROM fedora:46
 
 MAINTAINER "The KubeVirt Project" <kubevirt-dev@googlegroups.com>
 
